@@ -38,13 +38,14 @@ const Controls: React.FC<ControlsProps> = ({ isMicOn, isCameraOn, onToggleMic, o
       >
         {isCameraOn ? <VideoIcon /> : <VideoOffIcon />}
       </ControlButton>
-      <ControlButton 
+      <button 
         onClick={onLeave} 
-        className="bg-brand-danger hover:bg-red-500 focus:ring-red-500"
         title="Leave Room"
+        className="flex items-center gap-2 px-6 py-3 font-semibold text-white bg-brand-danger rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary transition-transform transform hover:scale-105"
       >
         <PhoneOffIcon />
-      </ControlButton>
+        <span>Leave Room</span>
+      </button>
     </div>
   );
 };
