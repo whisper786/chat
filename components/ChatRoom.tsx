@@ -37,9 +37,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
                 {/* Video participants as draggable windows */}
                 {props.participants.map((p, index) => {
-                    // Only render if stream exists and camera is on for self, or if it's a remote peer
-                    const shouldRender = p.id === props.myPeerId ? (p.stream && props.isCameraOn) : p.stream;
-                    if (!shouldRender) return null;
+                    // CRITICAL FIX: Always render a window for every remote participant.
+                    // Only hide the local user's window if their camera is off.
+                    // This ensures users see a placeholder immediately when someone joins.
+                    if (p.id === props.myPeerId && !props.isCameraOn) {
+                        return null;
+                    }
 
                     return (
                         <DraggableResizableWindow

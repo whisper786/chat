@@ -32,6 +32,11 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const callsRef = useRef<Map<string, MediaConnection>>(new Map());
   const peerRef = useRef<PeerJS | null>(null);
   const isJoiningRef = useRef(false);
+  const localStreamRef = useRef(localStream);
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
 
   const addMessage = useCallback((text: string, type: 'system' | 'user' = 'system', senderName?: string, senderId?: string) => {
     const isSelf = senderId === myPeerId;
@@ -146,8 +151,11 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     });
     
     p.on('call', (call) => {
-      if (localStream) {
-        call.answer(localStream);
+      // CRITICAL FIX: Use the ref to get the most up-to-date stream.
+      // This prevents answering a call with a null stream if the call
+      // event fires before React has re-rendered with the stream state.
+      if (localStreamRef.current) {
+        call.answer(localStreamRef.current);
         callsRef.current.set(call.peer, call);
         call.on('stream', (remoteStream) => {
           setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: remoteStream } : p));
@@ -156,6 +164,8 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
             callsRef.current.delete(call.peer);
             setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
         });
+      } else {
+          console.error("CRITICAL: Received a call but localStream is not available. This can cause one-way audio/video.");
       }
     });
     
