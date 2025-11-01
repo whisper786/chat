@@ -74,9 +74,13 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         break;
       }
       case 'user-left': {
-        const { peerId, name } = data.payload;
+        const { peerId, name, reason } = data.payload;
         setParticipants(prev => prev.filter(p => p.id !== peerId));
-        addMessage(`${name} has left the room.`);
+        if (reason === 'kicked') {
+            addMessage(`${name} was kicked from the room.`);
+        } else {
+            addMessage(`${name} has left the room.`);
+        }
         callsRef.current.get(peerId)?.close();
         callsRef.current.delete(peerId);
         break;
@@ -86,7 +90,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         cleanup();
         break;
       case 'kick':
-        setError('You have been kicked from the room.');
+        setError('You have been kicked from the room by the host.');
         cleanup();
         break;
        case 'all-participants': { 
@@ -111,11 +115,12 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     conn.on('data', (data: any) => handleIncomingData(data, conn));
     conn.on('close', () => {
       connectionsRef.current.delete(conn.peer);
-      // Host handles broadcasting the leave message
+      // Host handles broadcasting the leave message for graceful leaves.
+      // Kicked users are handled separately for immediate feedback.
       if (isHost) {
           const leftParticipant = participants.find(p => p.id === conn.peer);
-          if (leftParticipant) {
-             broadcast({ type: 'user-left', payload: { peerId: leftParticipant.id, name: leftParticipant.name } });
+          if (leftParticipant) { // Check if they haven't been removed already (e.g., by kick)
+             broadcast({ type: 'user-left', payload: { peerId: leftParticipant.id, name: leftParticipant.name, reason: 'left' } });
              setParticipants(prev => prev.filter(p => p.id !== conn.peer));
              addMessage(`${leftParticipant.name} has left the room.`);
              callsRef.current.get(conn.peer)?.close();
@@ -251,6 +256,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   }, [participants, localStream, isConnected, myPeerId]);
   
   const sendMessage = useCallback((text: string) => {
+      if (!text.trim() || !myPeerId) return;
       const message: Message = {
         id: `msg-${Date.now()}`,
         type: 'user',
@@ -265,12 +271,11 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const endCall = useCallback(() => {
     // Notify others that this user is leaving before cleaning up
     if (isHost) {
-        broadcast({ type: 'user-left', payload: { peerId: myPeerId, name: userName } });
+        broadcast({ type: 'user-left', payload: { peerId: myPeerId, name: userName, reason: 'left' } });
     } else {
-        // A guest only needs to notify the host
         const hostConn = connectionsRef.current.get(roomName!);
         if (hostConn && hostConn.open) {
-            hostConn.close(); // Closing connection will trigger 'close' event on host
+            hostConn.close();
         }
     }
     cleanup();
@@ -279,11 +284,23 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const kickUser = useCallback((peerId: string) => {
     if (!isHost) return;
     const conn = connectionsRef.current.get(peerId);
-    if (conn) {
+    const participantToKick = participants.find(p => p.id === peerId);
+
+    if (conn && participantToKick) {
+        // 1. Send kick message to the user
         conn.send({ type: 'kick', payload: {} });
-        setTimeout(() => conn.close(), 100); // Give time for message to send before closing
+
+        // 2. Immediately update local state and broadcast to others
+        broadcast({ type: 'user-left', payload: { peerId: participantToKick.id, name: participantToKick.name, reason: 'kicked' } });
+        setParticipants(prev => prev.filter(p => p.id !== peerId));
+        callsRef.current.get(peerId)?.close();
+        callsRef.current.delete(peerId);
+
+        // 3. Close the connection after a short delay to ensure message delivery
+        setTimeout(() => conn.close(), 100);
+        connectionsRef.current.delete(peerId);
     }
-  }, [isHost]);
+  }, [isHost, participants]);
 
   return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error, isHost, kickUser };
 };

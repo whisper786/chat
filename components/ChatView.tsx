@@ -28,7 +28,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, sendMessage }) => {
         if (msg.type === 'system') {
             return (
                 <div key={msg.id} className="text-center my-2">
-                    <span className="text-xs text-slate-400 italic px-2 py-1 bg-slate-800 rounded-full">{msg.text}</span>
+                    <span className="text-xs text-slate-400 italic">{msg.text}</span>
                 </div>
             );
         }
