@@ -40,33 +40,33 @@ const App: React.FC = () => {
   } = useRoomConnection(userInfo?.name, roomName, stream);
 
   const handleJoin = async (name: string) => {
-    // First, get media permissions and initialize the stream.
+    // This function's only job is to get permissions and set state.
+    // The useEffect hook will handle the logic to join the room once all states are ready.
     const streamReady = await initializeStream();
     if (!streamReady) {
-        // The error is set within the useMediaStream hook,
-        // so the UI will update to show the error message.
+        // Error is set in the hook, UI will update.
         return; 
     }
 
-    // Only set user info and room name after stream is ready.
     const info = { name: name.trim() };
     setUserInfo(info);
     
-    // If there's no room name from the hash, create one from the user's name
+    // If there's no room name from the hash, create one.
     if (!window.location.hash) {
-      const newRoomName = encodeURIComponent(info.name.replace(/\s+/g, '-'));
+      const newRoomName = encodeURIComponent(info.name.replace(/\s+/g, '-').toLowerCase());
       window.location.hash = newRoomName;
       setRoomName(newRoomName);
     }
   };
-
+  
   useEffect(() => {
-    // This effect now correctly triggers after handleJoin has successfully
-    // initialized the stream and set the user info and room name.
-    if (userInfo && roomName && !isConnected && !isConnecting) {
+    // CRITICAL FIX: The connection process should only start when the stream, user info,
+    // and room name are all available. This prevents race conditions where PeerJS
+    // tries to establish connections before the media stream is ready to be sent.
+    if (stream && userInfo && roomName && !isConnected && !isConnecting) {
         joinRoom();
     }
-  }, [userInfo, roomName, isConnected, isConnecting, joinRoom]);
+  }, [stream, userInfo, roomName, isConnected, isConnecting, joinRoom]);
 
 
   const handleLeave = useCallback(() => {

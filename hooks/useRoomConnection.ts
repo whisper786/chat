@@ -226,17 +226,16 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
 
   }, [userName, roomName, cleanup]);
 
-  // CRITICAL FIX: This effect ensures the local stream is added to the participant list
-  // as soon as it's available, solving the "camera not showing" bug.
+  // This effect ensures the local participant object always has the latest stream.
   useEffect(() => {
-    if (localStream && myPeerId && participants.some(p => p.id === myPeerId)) {
+    if (localStream && myPeerId && participants.some(p => p.id === myPeerId && p.stream !== localStream)) {
       setParticipants(prev =>
         prev.map(p =>
           p.id === myPeerId ? { ...p, stream: localStream } : p
         )
       );
     }
-  }, [localStream, myPeerId, participants.length]);
+  }, [localStream, myPeerId, participants]);
 
 
   useEffect(() => {
