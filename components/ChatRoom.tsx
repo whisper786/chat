@@ -36,21 +36,45 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </div>
 
                 {/* Video participants as draggable windows */}
-                {props.participants.map((p, index) => (
+                {props.participants.map((p, index) => {
+                    // Only render if stream exists and camera is on for self, or if it's a remote peer
+                    const shouldRender = p.id === props.myPeerId ? (p.stream && props.isCameraOn) : p.stream;
+                    if (!shouldRender) return null;
+
+                    return (
+                        <DraggableResizableWindow
+                            key={p.id}
+                            title={p.name + (p.id === props.myPeerId ? ' (You)' : '')}
+                            initialPosition={{ x: 50 + (index * 40), y: 50 + (index * 40) }}
+                            initialSize={{ width: 320, height: 240 }}
+                            onClose={() => { /* No-op for now, could hide window in future */ }}
+                        >
+                            <ParticipantView
+                                participant={p}
+                                isSelf={p.id === props.myPeerId}
+                                isMicOn={p.id === props.myPeerId ? props.isMicOn : undefined}
+                            />
+                        </DraggableResizableWindow>
+                    );
+                })}
+                
+                {/* Participants List as a draggable window */}
+                {isParticipantsOpen && props.myPeerId && (
                     <DraggableResizableWindow
-                        key={p.id}
-                        title={p.name + (p.id === props.myPeerId ? ' (You)' : '')}
-                        initialPosition={{ x: 50 + (index * 40), y: 50 + (index * 40) }}
-                        initialSize={{ width: 320, height: 240 }}
-                        onClose={() => { /* No-op for now, could hide window in future */ }}
+                        title={`Participants (${props.participants.length})`}
+                        initialPosition={{ x: window.innerWidth - 400, y: 50 }}
+                        initialSize={{ width: 350, height: 400 }}
+                        onClose={() => setIsParticipantsOpen(false)}
                     >
-                        <ParticipantView
-                            participant={p}
-                            isSelf={p.id === props.myPeerId}
-                            isMicOn={p.id === props.myPeerId ? props.isMicOn : undefined}
+                         <ParticipantList
+                            participants={props.participants}
+                            myPeerId={props.myPeerId}
+                            isHost={props.isHost}
+                            onKick={props.onKick}
                         />
                     </DraggableResizableWindow>
-                ))}
+                )}
+
 
                 {/* Main Controls Overlay */}
                 <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
@@ -64,18 +88,6 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     />
                 </footer>
             </main>
-            
-            {/* Participants Sidebar */}
-            <aside className={`w-80 bg-brand-secondary/90 backdrop-blur-sm border-l border-slate-700 flex flex-col transition-transform duration-300 ease-in-out ${isParticipantsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                {props.myPeerId && (
-                    <ParticipantList
-                        participants={props.participants}
-                        myPeerId={props.myPeerId}
-                        isHost={props.isHost}
-                        onKick={props.onKick}
-                    />
-                )}
-            </aside>
         </div>
     );
 };

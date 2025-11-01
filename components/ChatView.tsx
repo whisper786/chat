@@ -35,24 +35,24 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, sendMessage }) => {
         
         const isSelf = msg.senderId === 'self';
         return (
-            <div key={msg.id} className={`flex items-end gap-2 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex items-end gap-2 my-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
                  {!isSelf && (
                     <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold flex-shrink-0" title={msg.senderName}>
                         {msg.senderName?.charAt(0).toUpperCase()}
                     </div>
                 )}
-                <div className={`max-w-xs p-3 rounded-lg ${isSelf ? 'bg-brand-accent text-white rounded-br-none' : 'bg-slate-700 text-brand-light rounded-bl-none'}`}>
+                <div className={`max-w-xs md:max-w-md p-3 rounded-xl shadow ${isSelf ? 'bg-brand-accent text-white' : 'bg-slate-700 text-brand-light'}`}>
                     {!isSelf && <p className="text-sm font-bold mb-1 text-sky-300">{msg.senderName}</p>}
-                    <p className="text-base break-words">{msg.text}</p>
+                    <p className="text-base break-words whitespace-pre-wrap">{msg.text}</p>
                 </div>
             </div>
         );
     };
     
     return (
-        <div className="w-full h-full bg-brand-secondary flex flex-col">
+        <div className="w-full h-full bg-brand-primary flex flex-col">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {messages.map(renderMessage)}
                 <div ref={messagesEndRef} />
             </div>

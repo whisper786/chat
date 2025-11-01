@@ -91,7 +91,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         break;
        case 'all-participants': { 
           const allParticipants: Participant[] = data.payload;
-          setParticipants(allParticipants.map(p => p.id === myPeerId ? { ...p, stream: localStream } : p));
+          setParticipants(allParticipants);
           setIsConnected(true);
           setIsConnecting(false);
           addMessage('Successfully joined the room.');
@@ -191,7 +191,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       hostPeer.on('open', (id) => {
           setIsHost(true);
           setMyPeerId(id);
-          const self: Participant = { id, name: userName!, stream: localStream };
+          const self: Participant = { id, name: userName! };
           setParticipants([self]);
           setIsConnecting(false);
           setIsConnected(true);
@@ -219,7 +219,20 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         setupPeerListeners(guestPeer);
     });
 
-  }, [userName, roomName, cleanup, localStream]);
+  }, [userName, roomName, cleanup]);
+
+  // CRITICAL FIX: This effect ensures the local stream is added to the participant list
+  // as soon as it's available, solving the "camera not showing" bug.
+  useEffect(() => {
+    if (localStream && myPeerId && participants.some(p => p.id === myPeerId)) {
+      setParticipants(prev =>
+        prev.map(p =>
+          p.id === myPeerId ? { ...p, stream: localStream } : p
+        )
+      );
+    }
+  }, [localStream, myPeerId, participants.length]);
+
 
   useEffect(() => {
     if (isConnected && localStream && peerRef.current) {
