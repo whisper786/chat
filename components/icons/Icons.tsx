@@ -46,6 +46,10 @@ export const MoveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></SVGIcon>
 );
 
+export const UserPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <SVGIcon {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="17" y1="11" x2="23" y2="11"></line></SVGIcon>
+);
+
 export const UsersIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></SVGIcon>
 );

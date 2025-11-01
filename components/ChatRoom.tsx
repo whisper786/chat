@@ -5,7 +5,7 @@ import ParticipantView from './ParticipantView';
 import ParticipantList from './ParticipantList';
 import Controls from './Controls';
 import DraggableResizableWindow from './DraggableResizableWindow';
-import { SendIcon, UsersIcon, CloseIcon } from './icons/Icons';
+import { SendIcon, UsersIcon, CloseIcon, UserPlusIcon } from './icons/Icons';
 
 interface ChatRoomProps {
   roomId: string;
@@ -13,12 +13,6 @@ interface ChatRoomProps {
   isHost: boolean;
   onLeave: () => void;
 }
-
-// Mock data for demonstration
-const MOCK_PARTICIPANTS: Participant[] = [
-  { id: 'user-2', name: 'Alice', isHost: false },
-  { id: 'user-3', name: 'Bob', isHost: false },
-];
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userName, isHost, onLeave }) => {
   const { stream, isCameraOn, isMicOn, toggleCamera, toggleMic, error, startStream } = useMediaStream();
@@ -37,20 +31,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userName, isHost, onLeave }
   }, [stream, isHost, selfName]);
 
   useEffect(() => {
-    // Simulate joining and other participants
+    // On join, only show a message that the user has joined.
     setMessages([
         { id: `msg-${Date.now()}`, type: 'system', text: `You joined the room as "${userName}".` }
     ]);
-
-    setTimeout(() => {
-        setParticipants(MOCK_PARTICIPANTS);
-        setMessages(prev => [...prev, { id: `msg-${Date.now()+1}`, type: 'system', text: 'Alice has joined the room.' }])
-    }, 1000);
-
-    setTimeout(() => {
-        setMessages(prev => [...prev, { id: `msg-${Date.now()+2}`, type: 'system', text: 'Bob has joined the room.' }])
-    }, 2500);
-
   }, [roomId, userName]);
   
   const allParticipants = useMemo(() => {
@@ -117,6 +101,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userName, isHost, onLeave }
         return newSet;
     });
   }, []);
+
+  const handleSimulateUserJoin = useCallback(() => {
+    const demoUsers = [
+        { name: 'Alice', id: 'demo-user-1' },
+        { name: 'Bob', id: 'demo-user-2' },
+        { name: 'Charlie', id: 'demo-user-3' },
+    ];
+    
+    // Find the next user to add who isn't already in the room
+    const nextUserToAdd = demoUsers.find(demoUser => !participants.some(p => p.id === demoUser.id));
+
+    if (!nextUserToAdd) {
+        setMessages(prev => [...prev, { id: `msg-${Date.now()}`, type: 'system', text: `All demo users have joined.` }]);
+        return;
+    }
+
+    const newParticipant: Participant = {
+        ...nextUserToAdd,
+        isHost: false,
+    };
+    
+    setParticipants(prev => [...prev, newParticipant]);
+    setMessages(prev => [...prev, { id: `msg-${Date.now()}`, type: 'system', text: `${newParticipant.name} has joined the room.` }]);
+  }, [participants]);
   
   const renderMessage = (msg: Message) => {
     if (msg.type === 'system') {
@@ -161,6 +169,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userName, isHost, onLeave }
             {showCopied ? 'Copied!' : 'Copy Room ID'}
             </button>
             <button 
+                onClick={handleSimulateUserJoin}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-600 rounded-md hover:bg-slate-500"
+                title="Simulate a new user joining"
+            >
+                <UserPlusIcon className="w-5 h-5" />
+                <span>Simulate Join</span>
+            </button>
+            <button 
                 onClick={() => setShowParticipants(true)} 
                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-600 rounded-md hover:bg-slate-500"
                 title="View Participants"
@@ -191,6 +207,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId, userName, isHost, onLeave }
         <div className="flex-1 flex flex-col">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="text-center my-2 p-3 bg-yellow-800/30 rounded-lg border border-yellow-700/50">
+                <p className="text-sm text-yellow-300">
+                    <strong>Demo Mode:</strong> This is a frontend demonstration. Multi-user functionality is simulated.
+                    <br />
+                    A backend server is needed for real users to connect with each other.
+                </p>
+            </div>
             {messages.map(renderMessage)}
             <div ref={messagesEndRef} />
           </div>
