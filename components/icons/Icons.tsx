@@ -46,6 +46,7 @@ export const MoveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></SVGIcon>
 );
 
+// Fix: Corrected typo from React._FC to React.FC
 export const UserPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="17" y1="11" x2="23" y2="11"></line></SVGIcon>
 );
@@ -72,4 +73,8 @@ export const RestoreIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 export const CopyIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></SVGIcon>
+);
+
+export const ChatIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <SVGIcon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></SVGIcon>
 );

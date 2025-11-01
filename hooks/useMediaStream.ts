@@ -8,7 +8,6 @@ const useMediaStream = () => {
   const streamRef = useRef<MediaStream | null>(null);
 
   const startStream = useCallback(async () => {
-    // If stream already exists, do nothing.
     if (streamRef.current) return;
 
     try {

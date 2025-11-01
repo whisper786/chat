@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import Lobby from './components/Lobby';
 import ChatRoom from './components/ChatRoom';
-import usePeerConnection from './hooks/usePeerConnection';
+import useRoomConnection from './hooks/useRoomConnection';
 import useMediaStream from './hooks/useMediaStream';
+import JoinModal from './components/JoinModal';
 
 const App: React.FC = () => {
-  const [userName, setUserName] = useState('');
+  const [userInfo, setUserInfo] = useState<{ name: string; room: string } | null>(null);
+
   const { 
     stream, 
     isCameraOn, 
@@ -21,22 +22,23 @@ const App: React.FC = () => {
     friendStream,
     messages,
     sendMessage,
-    connectToPeer,
     endCall,
     isConnected,
     isConnecting,
     error: peerError,
-  } = usePeerConnection(userName, stream);
+    joinRoom,
+  } = useRoomConnection(userInfo?.name, userInfo?.room, stream);
 
-  const handleJoin = (name: string) => {
-    setUserName(name);
-    if (!stream) {
-      startStream();
-    }
+  const handleJoin = (name: string, room: string) => {
+    setUserInfo({ name, room });
+    joinRoom();
   };
 
   const handleLeave = useCallback(() => {
     endCall();
+    setUserInfo(null);
+    // A full reload ensures a clean state for rejoining.
+    window.location.reload();
   }, [endCall]);
 
   const error = mediaError || peerError;
@@ -52,8 +54,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-brand-primary font-sans">
-      {isConnected && stream ? (
+    <div className="min-h-screen bg-brand-primary font-sans overflow-hidden">
+      {!userInfo ? (
+        <JoinModal onJoin={handleJoin} />
+      ) : (
         <ChatRoom
           localStream={stream}
           remoteStream={friendStream}
@@ -64,14 +68,11 @@ const App: React.FC = () => {
           isCameraOn={isCameraOn}
           toggleMic={toggleMic}
           toggleCamera={toggleCamera}
-        />
-      ) : (
-        <Lobby
-          onJoin={handleJoin}
-          myPeerId={myPeerId}
-          connectToPeer={connectToPeer}
+          startStream={startStream}
+          userName={userInfo.name}
+          roomName={userInfo.room}
           isConnecting={isConnecting}
-          userNameEntered={!!userName}
+          isConnected={isConnected}
         />
       )}
     </div>
