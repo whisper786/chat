@@ -15,7 +15,7 @@ export interface Message {
 }
 
 interface BroadcastData {
-    type: 'chat' | 'user-joined' | 'user-left' | 'kick' | 'participant-list' | 'name-taken' | 'all-participants';
+    type: 'chat' | 'user-joined' | 'user-left' | 'participant-list' | 'name-taken' | 'all-participants';
     payload: any;
 }
 
@@ -32,6 +32,14 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const callsRef = useRef<Map<string, MediaConnection>>(new Map());
   const peerRef = useRef<PeerJS | null>(null);
   const isJoiningRef = useRef(false);
+
+  useEffect(() => {
+    if (myPeerId && localStream) {
+      setParticipants(prev =>
+        prev.map(p => (p.id === myPeerId ? { ...p, stream: localStream } : p))
+      );
+    }
+  }, [localStream, myPeerId]);
 
   const addMessage = useCallback((text: string, type: 'system' | 'user' = 'system', senderName?: string, senderId?: string) => {
     const isSelf = senderId === myPeerId;
@@ -77,10 +85,6 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         callsRef.current.delete(peerId);
         break;
       }
-      case 'kick':
-        addMessage("You have been kicked from the room by the host.");
-        endCall();
-        break;
       case 'name-taken':
         setError(`The name "${userName}" is already taken. Please choose another name.`);
         cleanup();
@@ -206,7 +210,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     isJoiningRef.current = true;
     setIsConnecting(true);
     setError(null);
-    setMessages([{ id: `sys-${Date.now()}`, type: 'system', text: `Attempting to join room...` }]);
+    setMessages([{ id: `sys-${Date.now()}`, type: 'system', text: `Attempting to join room: ${roomName}` }]);
 
     const guestPeer = new Peer() as PeerJS;
     peerRef.current = guestPeer;
@@ -247,21 +251,12 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       broadcast({type: 'chat', payload: message});
       addMessage(message.text, 'user', message.senderName, message.senderId);
   }, [myPeerId, userName, addMessage]);
-
-  const kickUser = useCallback((peerId: string) => {
-    if (!isHost) return;
-    const conn = connectionsRef.current.get(peerId);
-    if (conn) {
-      conn.send({type: 'kick', payload: null});
-      setTimeout(() => conn.close(), 100);
-    }
-  }, [isHost]);
   
   const endCall = useCallback(() => {
     cleanup();
   }, [cleanup]);
 
-  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, kickUser, isHost, isConnected, isConnecting, error };
+  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error };
 };
 
 export default useRoomConnection;

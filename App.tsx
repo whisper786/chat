@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ChatRoom from './components/ChatRoom';
 import useRoomConnection from './hooks/useRoomConnection';
 import useMediaStream from './hooks/useMediaStream';
@@ -6,7 +6,19 @@ import JoinModal from './components/JoinModal';
 
 const App: React.FC = () => {
   const [userInfo, setUserInfo] = useState<{ name: string } | null>(null);
-  const ROOM_NAME = 'global-secret-chat-room'; // Hardcoded room name
+  const [roomName, setRoomName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getRoomNameFromHash = () => {
+      if (window.location.hash) {
+        return window.location.hash.substring(1);
+      }
+      const newRoom = `room-${Math.random().toString(36).substr(2, 9)}`;
+      window.location.hash = newRoom;
+      return newRoom;
+    };
+    setRoomName(getRoomNameFromHash());
+  }, []);
 
   const { 
     stream, 
@@ -23,13 +35,11 @@ const App: React.FC = () => {
     messages,
     sendMessage,
     endCall,
-    kickUser,
-    isHost,
     isConnected,
     isConnecting,
     error: peerError,
     joinRoom,
-  } = useRoomConnection(userInfo?.name, ROOM_NAME, stream);
+  } = useRoomConnection(userInfo?.name, roomName, stream);
 
   const handleJoin = (name: string) => {
     setUserInfo({ name });
@@ -43,6 +53,14 @@ const App: React.FC = () => {
   }, [endCall]);
 
   const error = mediaError || peerError;
+
+  if (!roomName) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+            <p>Initializing Secret Chat Room...</p>
+        </div>
+    );
+  }
 
   if (error) {
     return (
@@ -71,10 +89,6 @@ const App: React.FC = () => {
           toggleMic={toggleMic}
           toggleCamera={toggleCamera}
           userName={userInfo.name}
-          isConnecting={isConnecting}
-          isConnected={isConnected}
-          isHost={isHost}
-          kickUser={kickUser}
         />
       )}
     </div>

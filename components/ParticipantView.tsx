@@ -1,16 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import type { Participant } from '../types';
-import { UserIcon, MicOffIcon, KickIcon } from './icons/Icons';
+import { UserIcon, MicOffIcon } from './icons/Icons';
 
 interface ParticipantViewProps {
   participant: Participant;
   isSelf?: boolean;
   isMicOn?: boolean; // For self view, to show status
-  isHost?: boolean;
-  onKick?: (id: string) => void;
 }
 
-const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf = false, isMicOn, isHost = false, onKick }) => {
+const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf = false, isMicOn }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -44,18 +42,6 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf =
           <span>{participant.name}{isSelf ? ' (You)' : ''}</span>
         </div>
       </div>
-
-      {isHost && !isSelf && onKick && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-           <button 
-            onClick={() => onKick(participant.id)} 
-            title={`Kick ${participant.name}`}
-            className="flex items-center justify-center w-8 h-8 font-semibold text-white bg-brand-danger/80 rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary"
-          >
-            <KickIcon className="w-5 h-5"/>
-          </button>
-        </div>
-      )}
     </div>
   );
 };
