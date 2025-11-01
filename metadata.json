@@ -1,0 +1,8 @@
+{
+  "name": "Secret Chat Room",
+  "description": "A secure and private chat application that allows users to create or join rooms for video and audio communication. Features include host controls like kicking participants, and personal controls for muting audio and toggling video.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
