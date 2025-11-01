@@ -1,5 +1,5 @@
 import React from 'react';
-import { VideoIcon, VideoOffIcon, MicIcon, MicOffIcon, PhoneOffIcon } from './icons/Icons';
+import { VideoIcon, VideoOffIcon, MicIcon, MicOffIcon, PhoneOffIcon, UsersIcon } from './icons/Icons';
 
 interface ControlsProps {
   onLeave: () => void;
@@ -7,9 +7,10 @@ interface ControlsProps {
   isCameraOn: boolean;
   toggleMic: () => void;
   toggleCamera: () => void;
+  onToggleParticipants: () => void;
 }
 
-const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string, title: string, active: boolean }> = ({ onClick, children, className = '', title, active }) => (
+const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string, title: string, active?: boolean }> = ({ onClick, children, className = '', title, active = true }) => (
     <button
         onClick={onClick}
         title={title}
@@ -20,7 +21,7 @@ const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; 
 );
 
 
-const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera }) => {
+const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera, onToggleParticipants }) => {
   return (
     <div className="flex items-center justify-center gap-4 p-2 bg-brand-secondary/80 backdrop-blur-sm rounded-full shadow-2xl">
       <ControlButton 
@@ -36,6 +37,13 @@ const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggl
           active={isCameraOn}
       >
           {isCameraOn ? <VideoIcon className="w-6 h-6"/> : <VideoOffIcon className="w-6 h-6"/>}
+      </ControlButton>
+       <ControlButton 
+          onClick={onToggleParticipants} 
+          title={'Participants'}
+          className="bg-slate-600 hover:bg-slate-500"
+      >
+          <UsersIcon className="w-6 h-6"/>
       </ControlButton>
       <button 
         onClick={onLeave} 

@@ -9,15 +9,10 @@ const App: React.FC = () => {
   const [roomName, setRoomName] = useState<string | null>(null);
 
   useEffect(() => {
-    const getRoomNameFromHash = () => {
-      if (window.location.hash) {
-        return window.location.hash.substring(1);
-      }
-      const newRoom = `room-${Math.random().toString(36).substr(2, 9)}`;
-      window.location.hash = newRoom;
-      return newRoom;
-    };
-    setRoomName(getRoomNameFromHash());
+    // Read room name from hash on initial load
+    if (window.location.hash) {
+      setRoomName(decodeURIComponent(window.location.hash.substring(1)));
+    }
   }, []);
 
   const { 
@@ -39,35 +34,46 @@ const App: React.FC = () => {
     isConnecting,
     error: peerError,
     joinRoom,
+    isHost,
+    kickUser,
   } = useRoomConnection(userInfo?.name, roomName, stream);
 
   const handleJoin = (name: string) => {
-    setUserInfo({ name });
-    joinRoom();
+    const info = { name: name.trim() };
+    setUserInfo(info);
+    
+    // If there's no room name from the hash, create one from the user's name
+    if (!window.location.hash) {
+      const newRoomName = encodeURIComponent(info.name.replace(/\s+/g, '-'));
+      window.location.hash = newRoomName;
+      setRoomName(newRoomName);
+    }
   };
+
+  useEffect(() => {
+    // Automatically join room once user info and room name are available
+    if (userInfo && roomName && !isConnected && !isConnecting) {
+        joinRoom();
+    }
+  }, [userInfo, roomName, isConnected, isConnecting, joinRoom]);
+
 
   const handleLeave = useCallback(() => {
     endCall();
     setUserInfo(null);
+    // Clear hash and reload to start fresh
+    window.location.hash = '';
     window.location.reload();
   }, [endCall]);
 
   const error = mediaError || peerError;
-
-  if (!roomName) {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-            <p>Initializing Secret Chat Room...</p>
-        </div>
-    );
-  }
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
         <h2 className="text-2xl text-brand-danger mb-4">An Error Occurred</h2>
         <p className="max-w-md mb-6">{error}</p>
-        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-brand-accent text-white font-semibold rounded-lg">Reload</button>
+        <button onClick={() => { window.location.hash = ''; window.location.reload(); }} className="px-6 py-2 bg-brand-accent text-white font-semibold rounded-lg">Start Over</button>
       </div>
     );
   }
@@ -89,6 +95,8 @@ const App: React.FC = () => {
           toggleMic={toggleMic}
           toggleCamera={toggleCamera}
           userName={userInfo.name}
+          isHost={isHost}
+          onKick={kickUser}
         />
       )}
     </div>
