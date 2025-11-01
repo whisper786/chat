@@ -21,7 +21,8 @@ const App: React.FC = () => {
     isMicOn, 
     toggleCamera, 
     toggleMic, 
-    error: mediaError 
+    error: mediaError,
+    initializeStream
   } = useMediaStream();
   
   const {
@@ -38,7 +39,16 @@ const App: React.FC = () => {
     kickUser,
   } = useRoomConnection(userInfo?.name, roomName, stream);
 
-  const handleJoin = (name: string) => {
+  const handleJoin = async (name: string) => {
+    // First, get media permissions and initialize the stream.
+    const streamReady = await initializeStream();
+    if (!streamReady) {
+        // The error is set within the useMediaStream hook,
+        // so the UI will update to show the error message.
+        return; 
+    }
+
+    // Only set user info and room name after stream is ready.
     const info = { name: name.trim() };
     setUserInfo(info);
     
@@ -51,7 +61,8 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    // Automatically join room once user info and room name are available
+    // This effect now correctly triggers after handleJoin has successfully
+    // initialized the stream and set the user info and room name.
     if (userInfo && roomName && !isConnected && !isConnecting) {
         joinRoom();
     }

@@ -7,7 +7,7 @@ const useMediaStream = () => {
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const startStreamIfNeeded = useCallback(async () => {
+  const initializeStream = useCallback(async () => {
     if (streamRef.current) return true;
 
     try {
@@ -40,7 +40,7 @@ const useMediaStream = () => {
   }, []);
 
   const toggleCamera = useCallback(async () => {
-    const success = await startStreamIfNeeded();
+    const success = await initializeStream();
     if (!success || !streamRef.current) return;
 
     const videoTrack = streamRef.current.getVideoTracks()[0];
@@ -48,10 +48,10 @@ const useMediaStream = () => {
       videoTrack.enabled = !videoTrack.enabled;
       setIsCameraOn(videoTrack.enabled);
     }
-  }, [startStreamIfNeeded]);
+  }, [initializeStream]);
 
   const toggleMic = useCallback(async () => {
-    const success = await startStreamIfNeeded();
+    const success = await initializeStream();
     if (!success || !streamRef.current) return;
     
     const audioTrack = streamRef.current.getAudioTracks()[0];
@@ -59,9 +59,9 @@ const useMediaStream = () => {
       audioTrack.enabled = !audioTrack.enabled;
       setIsMicOn(audioTrack.enabled);
     }
-  }, [startStreamIfNeeded]);
+  }, [initializeStream]);
 
-  return { stream, isCameraOn, isMicOn, toggleCamera, toggleMic, error };
+  return { stream, isCameraOn, isMicOn, toggleCamera, toggleMic, error, initializeStream };
 };
 
 export default useMediaStream;
