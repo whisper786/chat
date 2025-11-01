@@ -69,3 +69,7 @@ export const MinimizeIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
 export const RestoreIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <SVGIcon {...props}><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></SVGIcon>
 );
+
+export const CopyIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <SVGIcon {...props}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></SVGIcon>
+);
