@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { Participant } from '../types';
 
-// Since we're loading PeerJS from a CDN, we need to declare its type for TypeScript
 declare const Peer: any;
 type PeerJS = import('peerjs').default;
 type DataConnection = import('peerjs').DataConnection;
@@ -14,156 +14,229 @@ export interface Message {
   text: string;
 }
 
+interface BroadcastData {
+    type: 'chat' | 'user-joined' | 'user-left' | 'kick' | 'participant-list' | 'name-taken' | 'all-participants';
+    payload: any;
+}
+
 const useRoomConnection = (userName: string | null, roomName: string | null, localStream: MediaStream | null) => {
-  const [peer, setPeer] = useState<PeerJS | null>(null);
   const [myPeerId, setMyPeerId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [friendStream, setFriendStream] = useState<MediaStream | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isHost, setIsHost] = useState(false);
   
-  const dataConnectionRef = useRef<DataConnection | null>(null);
-  const callRef = useRef<MediaConnection | null>(null);
-  const isHostRef = useRef(false);
+  const connectionsRef = useRef<Map<string, DataConnection>>(new Map());
+  const callsRef = useRef<Map<string, MediaConnection>>(new Map());
   const peerRef = useRef<PeerJS | null>(null);
+  const isJoiningRef = useRef(false);
 
-  const cleanup = () => {
-    if (callRef.current) {
-      callRef.current.close();
-    }
-    if (dataConnectionRef.current) {
-      dataConnectionRef.current.close();
-    }
-    if (peerRef.current) {
-      peerRef.current.destroy();
-    }
-    callRef.current = null;
-    dataConnectionRef.current = null;
-    peerRef.current = null;
-    setPeer(null);
-    setIsConnected(false);
-    setFriendStream(null);
+  const addMessage = useCallback((text: string, type: 'system' | 'user' = 'system', senderName?: string, senderId?: string) => {
+    const isSelf = senderId === myPeerId;
+    setMessages(prev => [...prev, { id: `msg-${Date.now()}-${Math.random()}`, type, text, senderName, senderId: isSelf ? 'self' : senderId }]);
+  }, [myPeerId]);
+  
+  const broadcast = (data: BroadcastData) => {
+      connectionsRef.current.forEach(conn => {
+          if (conn.open) {
+              conn.send(data);
+          }
+      });
   };
 
+  const cleanup = useCallback(() => {
+    isJoiningRef.current = false;
+    peerRef.current?.destroy();
+    peerRef.current = null;
+    connectionsRef.current.clear();
+    callsRef.current.clear();
+    setIsConnected(false);
+    setParticipants([]);
+    setIsHost(false);
+    setMyPeerId(null);
+  }, []);
+
+  const handleIncomingData = (data: BroadcastData, conn: DataConnection) => {
+    switch(data.type) {
+      case 'chat':
+        addMessage(data.payload.text, 'user', data.payload.senderName, data.payload.senderId);
+        break;
+      case 'user-joined': {
+        const newUser: Participant = data.payload;
+        setParticipants(prev => [...prev.filter(p => p.id !== newUser.id), newUser]);
+        addMessage(`${newUser.name} has joined the room.`);
+        break;
+      }
+      case 'user-left': {
+        const { peerId, name } = data.payload;
+        setParticipants(prev => prev.filter(p => p.id !== peerId));
+        addMessage(`${name} has left the room.`);
+        callsRef.current.get(peerId)?.close();
+        callsRef.current.delete(peerId);
+        break;
+      }
+      case 'kick':
+        addMessage("You have been kicked from the room by the host.");
+        endCall();
+        break;
+      case 'name-taken':
+        setError(`The name "${userName}" is already taken. Please choose another name.`);
+        cleanup();
+        break;
+       case 'all-participants': { // Sent from Host to new user
+          const allParticipants: Participant[] = data.payload;
+          setParticipants(allParticipants);
+          setIsConnected(true);
+          setIsConnecting(false);
+          addMessage('Successfully joined the room.');
+          allParticipants.forEach(p => {
+              if (p.id !== myPeerId && !connectionsRef.current.has(p.id)) {
+                  const dataConnection = peerRef.current!.connect(p.id, { metadata: { name: userName, initial: false } });
+                  setupDataConnection(dataConnection);
+              }
+          });
+        }
+        break;
+    }
+  };
+
+  const setupDataConnection = (conn: DataConnection) => {
+    connectionsRef.current.set(conn.peer, conn);
+    conn.on('data', (data: any) => handleIncomingData(data, conn));
+    conn.on('close', () => {
+      connectionsRef.current.delete(conn.peer);
+      const leftParticipant = participants.find(p => p.id === conn.peer);
+      if (leftParticipant) {
+          setParticipants(prev => prev.filter(p => p.id !== conn.peer));
+          if (isHost) { // Host notifies everyone
+             broadcast({ type: 'user-left', payload: { peerId: leftParticipant.id, name: leftParticipant.name } });
+          }
+          addMessage(`${leftParticipant.name} has left the room.`);
+          callsRef.current.get(conn.peer)?.close();
+          callsRef.current.delete(conn.peer);
+      }
+    });
+    conn.on('error', (err) => console.error(`Connection error with ${conn.peer}:`, err));
+  };
+  
   const setupPeerListeners = (p: PeerJS) => {
-    p.on('connection', (conn) => {
-      console.log('Incoming data connection');
-      dataConnectionRef.current = conn;
-      conn.on('data', (data: any) => {
-        setMessages(prev => [...prev, data as Message]);
-      });
-      conn.on('open', () => {
-        setIsConnected(true);
+     p.on('error', (err: any) => {
+      if (err.type === 'peer-unavailable' && isJoiningRef.current) {
+         becomeHost();
+      } else if (!p.destroyed) {
+        setError(`Connection error: ${err.message}.`);
         setIsConnecting(false);
-        setMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'system', text: 'Friend has joined the room.' }]);
-      });
-      conn.on('close', () => {
-        setMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'system', text: 'Friend has left the room.' }]);
-        setIsConnected(false);
-        setFriendStream(null);
-      });
+      }
+    });
+    
+    p.on('disconnected', () => {
+        if (!p.destroyed) {
+            setError('Connection to server lost. Attempting to reconnect...');
+            p.reconnect();
+        }
     });
 
     p.on('call', (call) => {
-      console.log('Incoming call');
       if (localStream) {
         call.answer(localStream);
+        callsRef.current.set(call.peer, call);
         call.on('stream', (remoteStream) => {
-          setFriendStream(remoteStream);
+          setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: remoteStream } : p));
         });
-        callRef.current = call;
-      } else {
-        console.log("No local stream to answer call with");
+        call.on('close', () => {
+            callsRef.current.delete(call.peer);
+            setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
+        });
       }
     });
+    
+     p.on('connection', (conn) => {
+      // Host logic for new connections
+      if (isHost) {
+        const newUserName = conn.metadata.name;
+        const nameExists = participants.some(p => p.name.toLowerCase() === newUserName.toLowerCase());
+        
+        if(nameExists) {
+          conn.on('open', () => conn.send({ type: 'name-taken' }));
+          setTimeout(() => conn.close(), 100);
+          return;
+        }
 
-    p.on('error', (err: any) => {
-      console.error('PeerJS error:', err);
-      if (err.type === 'peer-unavailable') {
-         // This is expected if we are the first to join. We will become the host.
-         console.log('Peer not available, creating room...');
-         isHostRef.current = true;
-         const hostPeer = new Peer(roomName) as PeerJS;
-         setMyPeerId(hostPeer.id);
-         setPeer(hostPeer);
-         peerRef.current = hostPeer;
-         setupPeerListeners(hostPeer);
-      } else {
-        setError(`Connection error: ${err.message}. Your friend might have disconnected.`);
+        conn.on('open', () => {
+          setupDataConnection(conn);
+          const newUser: Participant = { id: conn.peer, name: newUserName };
+          const currentParticipants = [...participants, newUser];
+          
+          conn.send({ type: 'all-participants', payload: currentParticipants });
+          broadcast({ type: 'user-joined', payload: newUser });
+          
+          setParticipants(currentParticipants);
+          addMessage(`${newUser.name} has joined the room.`);
+        });
+      } else { // Guest logic for incoming connections from other guests
+        setupDataConnection(conn);
       }
-      setIsConnecting(false);
-    });
-
-    p.on('disconnected', () => {
-      setError('Connection lost. Please try rejoining the room.');
-      setIsConnected(false);
     });
   }
 
-  const joinRoom = useCallback(() => {
-    if (!userName || !roomName) return;
-    
-    setIsConnecting(true);
-    setMessages([{ id: `sys-${Date.now()}`, type: 'system', text: `Attempting to join room: ${roomName}...` }]);
+  const becomeHost = () => {
+      peerRef.current?.destroy();
+      isJoiningRef.current = false;
+      addMessage('No room found, creating a new one...');
+      const hostPeer = new Peer(roomName) as PeerJS;
+      peerRef.current = hostPeer;
+      hostPeer.on('open', (id) => {
+          setIsHost(true);
+          setMyPeerId(id);
+          const self: Participant = { id, name: userName! };
+          setParticipants([self]);
+          setIsConnecting(false);
+          setIsConnected(true);
+          addMessage('You are the host. Waiting for others to join.');
+          setupPeerListeners(hostPeer);
+      });
+  };
 
-    // Guest peer with random ID
+  const joinRoom = useCallback(() => {
+    if (!userName || !roomName || isJoiningRef.current) return;
+    
+    cleanup();
+    isJoiningRef.current = true;
+    setIsConnecting(true);
+    setError(null);
+    setMessages([{ id: `sys-${Date.now()}`, type: 'system', text: `Attempting to join room...` }]);
+
     const guestPeer = new Peer() as PeerJS;
     peerRef.current = guestPeer;
     
     guestPeer.on('open', (id) => {
         setMyPeerId(id);
-
-        console.log(`Trying to connect to host: ${roomName}`);
-        const dataConnection = guestPeer.connect(roomName);
-        dataConnectionRef.current = dataConnection;
-        
-        dataConnection.on('open', () => {
-            console.log('Data connection opened with host');
-            setIsConnected(true);
-            setIsConnecting(false);
-            setMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'system', text: 'Successfully joined the room.' }]);
-            if (localStream) {
-                const call = guestPeer.call(roomName, localStream);
-                call.on('stream', (remoteStream) => {
-                    setFriendStream(remoteStream);
-                });
-                callRef.current = call;
-            }
-        });
-        
-        dataConnection.on('data', (data: any) => {
-           setMessages(prev => [...prev, data as Message]);
-        });
-        
-        dataConnection.on('close', () => {
-          setMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'system', text: 'Friend has left the room.' }]);
-          setIsConnected(false);
-          setFriendStream(null);
-        });
-
-        setPeer(guestPeer);
+        const hostConnection = guestPeer.connect(roomName, { metadata: { name: userName } });
+        hostConnection.on('open', () => setupDataConnection(hostConnection));
         setupPeerListeners(guestPeer);
     });
 
-  }, [userName, roomName, localStream]);
+  }, [userName, roomName, cleanup]);
 
-  // Effect to re-attempt call when localStream becomes available
   useEffect(() => {
-      if (isConnected && localStream && !callRef.current && dataConnectionRef.current) {
-          console.log("Local stream is ready, initiating call.");
-          const call = peerRef.current?.call(dataConnectionRef.current.peer, localStream);
-          if (call) {
-            call.on('stream', (remoteStream) => {
-                setFriendStream(remoteStream);
-            });
-            callRef.current = call;
-          }
-      }
-  }, [localStream, isConnected]);
+    if (isConnected && localStream && peerRef.current) {
+        participants.forEach(p => {
+            if (p.id !== myPeerId && !callsRef.current.has(p.id)) {
+                const call = peerRef.current!.call(p.id, localStream);
+                if (call) {
+                    callsRef.current.set(p.id, call);
+                    call.on('stream', (remoteStream) => {
+                        setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: remoteStream } : user));
+                    });
+                }
+            }
+        });
+    }
+  }, [participants, localStream, isConnected, myPeerId]);
   
   const sendMessage = useCallback((text: string) => {
-    if (dataConnectionRef.current && dataConnectionRef.current.open) {
       const message: Message = {
         id: `msg-${Date.now()}`,
         type: 'user',
@@ -171,16 +244,24 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         senderName: userName || 'User',
         text: text.trim(),
       };
-      dataConnectionRef.current.send(message);
-      setMessages(prev => [...prev, {...message, senderId: 'self' }]);
-    }
-  }, [myPeerId, userName]);
+      broadcast({type: 'chat', payload: message});
+      addMessage(message.text, 'user', message.senderName, message.senderId);
+  }, [myPeerId, userName, addMessage]);
 
+  const kickUser = useCallback((peerId: string) => {
+    if (!isHost) return;
+    const conn = connectionsRef.current.get(peerId);
+    if (conn) {
+      conn.send({type: 'kick', payload: null});
+      setTimeout(() => conn.close(), 100);
+    }
+  }, [isHost]);
+  
   const endCall = useCallback(() => {
     cleanup();
-  }, []);
+  }, [cleanup]);
 
-  return { myPeerId, friendStream, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error };
+  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, kickUser, isHost, isConnected, isConnecting, error };
 };
 
 export default useRoomConnection;

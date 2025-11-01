@@ -1,27 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import type { Participant } from '../types';
-import { UserIcon, MicIcon, MicOffIcon, VideoIcon, VideoOffIcon } from './icons/Icons';
+import { UserIcon, MicOffIcon, KickIcon } from './icons/Icons';
 
 interface ParticipantViewProps {
   participant: Participant;
   isSelf?: boolean;
-  isMicOn?: boolean;
-  isCameraOn?: boolean;
-  toggleMic?: () => void;
-  toggleCamera?: () => void;
+  isMicOn?: boolean; // For self view, to show status
+  isHost?: boolean;
+  onKick?: (id: string) => void;
 }
 
-const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string, title: string }> = ({ onClick, children, className = '', title }) => (
-    <button
-        onClick={onClick}
-        title={title}
-        className={`w-8 h-8 flex items-center justify-center rounded-full transition-all duration-300 ${className}`}
-    >
-        {children}
-    </button>
-);
-
-const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf = false, isMicOn, isCameraOn, toggleMic, toggleCamera }) => {
+const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf = false, isMicOn, isHost = false, onKick }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -30,9 +19,11 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf =
     }
   }, [participant.stream]);
 
+  const hasVideo = participant.stream && participant.stream.getVideoTracks().some(track => track.enabled);
+
   return (
-    <div className="w-full h-full bg-slate-800 flex items-center justify-center relative group">
-      {participant.stream && isCameraOn !== false ? (
+    <div className="w-full h-full bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center relative group aspect-video">
+      {participant.stream && hasVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -43,33 +34,27 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({ participant, isSelf =
       ) : (
         <div className="flex flex-col items-center text-slate-400">
             <UserIcon className="w-16 h-16" />
-            <p className="mt-2 text-sm">{isSelf ? 'Your camera is off' : 'No video stream'}</p>
         </div>
       )}
       
-      {isSelf && toggleMic && toggleCamera && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-            <ControlButton 
-                onClick={toggleMic} 
-                className={isMicOn ? 'bg-slate-600/80 hover:bg-slate-500' : 'bg-brand-danger/80 hover:bg-red-500'}
-                title={isMicOn ? 'Mute' : 'Unmute'}
-            >
-                {isMicOn ? <MicIcon className="w-5 h-5"/> : <MicOffIcon className="w-5 h-5"/>}
-            </ControlButton>
-            <ControlButton 
-                onClick={toggleCamera}
-                className={isCameraOn ? 'bg-slate-600/80 hover:bg-slate-500' : 'bg-brand-danger/80 hover:bg-red-500'}
-                title={isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
-            >
-                {isCameraOn ? <VideoIcon className="w-5 h-5"/> : <VideoOffIcon className="w-5 h-5"/>}
-            </ControlButton>
+      <div className="absolute bottom-2 left-2 flex items-center gap-2">
+        <div className="p-1 px-3 bg-black/50 rounded-full text-sm text-white flex items-center gap-2">
+          {!isSelf && !participant.stream?.getAudioTracks().some(t => t.enabled) && <MicOffIcon className="w-4 h-4 text-red-400" />}
+          {isSelf && !isMicOn && <MicOffIcon className="w-4 h-4 text-red-400" />}
+          <span>{participant.name}{isSelf ? ' (You)' : ''}</span>
         </div>
-      )}
+      </div>
 
-      {!isSelf && participant.stream && (
-         <div className="absolute bottom-2 left-2 p-1 px-2 bg-black/50 rounded-md text-xs">
-           Friend
-         </div>
+      {isHost && !isSelf && onKick && (
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+           <button 
+            onClick={() => onKick(participant.id)} 
+            title={`Kick ${participant.name}`}
+            className="flex items-center justify-center w-8 h-8 font-semibold text-white bg-brand-danger/80 rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary"
+          >
+            <KickIcon className="w-5 h-5"/>
+          </button>
+        </div>
       )}
     </div>
   );

@@ -5,7 +5,8 @@ import useMediaStream from './hooks/useMediaStream';
 import JoinModal from './components/JoinModal';
 
 const App: React.FC = () => {
-  const [userInfo, setUserInfo] = useState<{ name: string; room: string } | null>(null);
+  const [userInfo, setUserInfo] = useState<{ name: string } | null>(null);
+  const ROOM_NAME = 'global-secret-chat-room'; // Hardcoded room name
 
   const { 
     stream, 
@@ -13,31 +14,31 @@ const App: React.FC = () => {
     isMicOn, 
     toggleCamera, 
     toggleMic, 
-    error: mediaError, 
-    startStream 
+    error: mediaError 
   } = useMediaStream();
   
   const {
     myPeerId,
-    friendStream,
+    participants,
     messages,
     sendMessage,
     endCall,
+    kickUser,
+    isHost,
     isConnected,
     isConnecting,
     error: peerError,
     joinRoom,
-  } = useRoomConnection(userInfo?.name, userInfo?.room, stream);
+  } = useRoomConnection(userInfo?.name, ROOM_NAME, stream);
 
-  const handleJoin = (name: string, room: string) => {
-    setUserInfo({ name, room });
+  const handleJoin = (name: string) => {
+    setUserInfo({ name });
     joinRoom();
   };
 
   const handleLeave = useCallback(() => {
     endCall();
     setUserInfo(null);
-    // A full reload ensures a clean state for rejoining.
     window.location.reload();
   }, [endCall]);
 
@@ -60,7 +61,8 @@ const App: React.FC = () => {
       ) : (
         <ChatRoom
           localStream={stream}
-          remoteStream={friendStream}
+          myPeerId={myPeerId}
+          participants={participants}
           messages={messages}
           sendMessage={sendMessage}
           onLeave={handleLeave}
@@ -68,11 +70,11 @@ const App: React.FC = () => {
           isCameraOn={isCameraOn}
           toggleMic={toggleMic}
           toggleCamera={toggleCamera}
-          startStream={startStream}
           userName={userInfo.name}
-          roomName={userInfo.room}
           isConnecting={isConnecting}
           isConnected={isConnected}
+          isHost={isHost}
+          kickUser={kickUser}
         />
       )}
     </div>

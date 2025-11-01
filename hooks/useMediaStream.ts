@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 const useMediaStream = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -7,8 +7,8 @@ const useMediaStream = () => {
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const startStream = useCallback(async () => {
-    if (streamRef.current) return;
+  const startStreamIfNeeded = useCallback(async () => {
+    if (streamRef.current) return true;
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -16,10 +16,14 @@ const useMediaStream = () => {
         audio: true,
       });
       streamRef.current = mediaStream;
+
+      // Disable tracks by default, user will enable them via UI
+      mediaStream.getVideoTracks().forEach(track => track.enabled = false);
+      mediaStream.getAudioTracks().forEach(track => track.enabled = false);
+      
       setStream(mediaStream);
-      setIsCameraOn(true);
-      setIsMicOn(true);
       setError(null);
+      return true;
     } catch (err) {
       console.error('Error accessing media devices.', err);
       if (err instanceof Error) {
@@ -31,38 +35,33 @@ const useMediaStream = () => {
       } else {
           setError('An unknown error occurred while trying to access media devices.');
       }
+      return false;
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
+  const toggleCamera = useCallback(async () => {
+    const success = await startStreamIfNeeded();
+    if (!success || !streamRef.current) return;
 
-  const toggleCamera = useCallback(() => {
-    if (streamRef.current) {
-      const videoTrack = streamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsCameraOn(videoTrack.enabled);
-      }
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setIsCameraOn(videoTrack.enabled);
     }
-  }, []);
+  }, [startStreamIfNeeded]);
 
-  const toggleMic = useCallback(() => {
-    if (streamRef.current) {
-      const audioTrack = streamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMicOn(audioTrack.enabled);
-      }
+  const toggleMic = useCallback(async () => {
+    const success = await startStreamIfNeeded();
+    if (!success || !streamRef.current) return;
+    
+    const audioTrack = streamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setIsMicOn(audioTrack.enabled);
     }
-  }, []);
+  }, [startStreamIfNeeded]);
 
-  return { stream, isCameraOn, isMicOn, toggleCamera, toggleMic, error, startStream };
+  return { stream, isCameraOn, isMicOn, toggleCamera, toggleMic, error };
 };
 
 export default useMediaStream;
