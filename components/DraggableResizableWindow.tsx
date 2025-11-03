@@ -133,18 +133,18 @@ const DraggableResizableWindow: React.FC<DraggableResizableWindowProps> = ({
     left: `${position.x}px`,
     top: `${position.y}px`,
     width: `${size.width}px`,
-    height: isMinimized ? `2rem` : `${size.height}px`,
+    height: isMinimized ? `2.25rem` : `${size.height}px`,
     transition: isDragging.current || isResizing.current ? undefined : 'width 0.2s ease, height 0.2s ease',
   };
 
   return (
     <div
       ref={nodeRef}
-      className="absolute bg-brand-secondary rounded-lg shadow-2xl border border-slate-600 flex flex-col"
+      className="absolute bg-brand-secondary rounded-lg shadow-2xl border border-brand-accent/50 flex flex-col"
       style={windowStyle}
     >
       <div 
-        className={`h-8 bg-slate-700 rounded-t-lg flex items-center justify-between px-2 ${!isMaximized && !isMinimized ? 'cursor-move' : 'cursor-default'}`}
+        className={`h-9 bg-brand-accent rounded-t-lg flex items-center justify-between px-2 ${!isMaximized && !isMinimized ? 'cursor-move' : 'cursor-default'}`}
         onMouseDown={handleDragMouseDown}
       >
         <span className="text-sm font-bold text-brand-light truncate pr-2">{title}</span>
@@ -167,8 +167,8 @@ const DraggableResizableWindow: React.FC<DraggableResizableWindowProps> = ({
                 className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
                 onMouseDown={handleResizeMouseDown}
                 style={{
-                    borderBottom: '2px solid #38bdf8',
-                    borderRight: '2px solid #38bdf8',
+                    borderBottom: '2px solid #e94560',
+                    borderRight: '2px solid #e94560',
                 }}
             />
         )}

@@ -1,6 +1,6 @@
 {
-  "name": "Secret Chat Room",
-  "description": "A secure and private chat application that allows users to create or join rooms for video and audio communication. Features include host controls like kicking participants, and personal controls for muting audio and toggling video.",
+  "name": "Nexus Chat",
+  "description": "A stylish and private communication app. Create or join rooms for video calls and text chat. The room creator becomes the host with powers to kick participants or promote others to host.",
   "requestFramePermissions": [
     "camera",
     "microphone"

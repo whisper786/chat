@@ -6,9 +6,10 @@ import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import ParticipantList from './ParticipantList';
-import { PhoneIcon, VideoIcon } from './icons/Icons';
+import { PhoneIcon, VideoIcon, UsersIcon } from './icons/Icons';
 
 interface ChatRoomProps {
+    roomName: string | null;
     localStream: MediaStream | null;
     myPeerId: string | null;
     participants: Participant[];
@@ -22,6 +23,7 @@ interface ChatRoomProps {
     userName: string;
     isHost: boolean;
     onKick: (peerId: string) => void;
+    onPromote: (peerId: string) => void;
     callState: 'idle' | 'outgoing' | 'incoming' | 'connected';
     callPartner: Participant | null;
     makeCall: (peerId: string) => void;
@@ -31,14 +33,14 @@ interface ChatRoomProps {
 }
 
 const RoomHeader: React.FC<{
+    roomName: string;
+    participantCount: number;
     otherParticipant: Participant | undefined;
     callState: 'idle' | 'outgoing' | 'incoming' | 'connected';
     makeCall: () => void;
-}> = ({ otherParticipant, callState, makeCall }) => {
-    let statusText = "Secret Chat Room";
-    if (otherParticipant) {
-        statusText = otherParticipant.name;
-    }
+    onToggleParticipants: () => void;
+}> = ({ roomName, participantCount, otherParticipant, callState, makeCall, onToggleParticipants }) => {
+    let statusText = roomName;
     if (callState === 'outgoing') {
         statusText = `Calling ${otherParticipant?.name}...`;
     } else if (callState === 'connected') {
@@ -46,8 +48,15 @@ const RoomHeader: React.FC<{
     }
 
     return (
-        <header className="flex items-center justify-between p-3 bg-brand-secondary border-b border-slate-700 shadow-md z-40">
-            <h1 className="text-xl font-bold">{statusText}</h1>
+        <header className="flex items-center justify-between p-3 bg-brand-secondary/80 border-b border-brand-accent/50 shadow-md z-40">
+            <button onClick={onToggleParticipants} className="text-left hover:bg-brand-accent/30 p-2 rounded-lg transition-colors">
+                <h1 className="text-xl font-bold capitalize">{statusText}</h1>
+                <div className="flex items-center text-sm text-brand-light/70">
+                    <UsersIcon className="w-4 h-4 mr-2" />
+                    <span>{participantCount} {participantCount === 1 ? 'person' : 'people'} here</span>
+                </div>
+            </button>
+
             {otherParticipant && callState === 'idle' && (
                 <button
                     onClick={makeCall}
@@ -67,7 +76,7 @@ const IncomingCallAlert: React.FC<{
     rejectCall: () => void;
 }> = ({ callPartner, answerCall, rejectCall }) => {
     return (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-slate-800 p-4 rounded-lg shadow-2xl z-50 flex items-center gap-4 animate-pulse">
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-slate-800 p-4 rounded-lg shadow-2xl z-50 flex items-center gap-4 animate-pulse">
             <p className="font-semibold">{callPartner.name} is calling...</p>
             <button onClick={answerCall} className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-400">Answer</button>
             <button onClick={rejectCall} className="px-4 py-2 bg-brand-danger text-white rounded-md hover:bg-red-500">Decline</button>
@@ -129,7 +138,7 @@ const CallView: React.FC<{
             {/* Local Video (Picture-in-Picture) */}
             <div
                 ref={localVideoRef}
-                className="absolute top-4 right-4 w-48 h-36 z-20 cursor-move shadow-2xl rounded-lg overflow-hidden border-2 border-brand-accent"
+                className="absolute top-4 right-4 w-48 h-36 z-20 cursor-move shadow-2xl rounded-lg overflow-hidden border-2 border-brand-highlight"
                 style={{ touchAction: 'none' }}
             >
                 {isCameraOn ? (
@@ -156,9 +165,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     return (
         <div className="h-screen w-screen flex flex-col bg-brand-primary text-brand-light relative overflow-hidden">
             <RoomHeader
+                roomName={props.roomName || "Nexus Chat"}
+                participantCount={props.participants.length}
                 otherParticipant={otherParticipant}
                 callState={props.callState}
                 makeCall={() => otherParticipant && props.makeCall(otherParticipant.id)}
+                onToggleParticipants={() => setIsParticipantsOpen(prev => !prev)}
             />
 
             {props.callState === 'incoming' && props.callPartner && (
@@ -187,7 +199,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 {isParticipantsOpen && props.myPeerId && (
                     <DraggableResizableWindow
                         title={`Participants (${props.participants.length})`}
-                        initialPosition={{ x: window.innerWidth - 400, y: 80 }}
+                        initialPosition={{ x: window.innerWidth - 400, y: 100 }}
                         initialSize={{ width: 350, height: 400 }}
                         onClose={() => setIsParticipantsOpen(false)}
                     >
@@ -196,6 +208,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                             myPeerId={props.myPeerId}
                             isHost={props.isHost}
                             onKick={props.onKick}
+                            onPromote={props.onPromote}
                         />
                     </DraggableResizableWindow>
                 )}
@@ -210,7 +223,6 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     isCameraOn={props.isCameraOn}
                     toggleMic={props.toggleMic}
                     toggleCamera={props.toggleCamera}
-                    onToggleParticipants={() => setIsParticipantsOpen(prev => !prev)}
                     callState={props.callState}
                     hangUp={props.hangUp}
                 />

@@ -15,7 +15,7 @@ export interface Message {
 }
 
 interface BroadcastData {
-    type: 'chat' | 'user-joined' | 'user-left' | 'participant-list' | 'name-taken' | 'all-participants' | 'kick' | 'call-request' | 'call-accepted' | 'call-rejected' | 'call-ended';
+    type: 'chat' | 'user-joined' | 'user-left' | 'participant-list' | 'name-taken' | 'all-participants' | 'kick' | 'promote-host' | 'call-request' | 'call-accepted' | 'call-rejected' | 'call-ended';
     payload: any;
 }
 
@@ -130,6 +130,20 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
           });
         }
         break;
+      case 'promote-host': {
+          const { peerId, promoterName } = data.payload;
+          setParticipants(prev => prev.map(p => p.id === peerId ? { ...p, isHost: true } : p));
+          if (peerId === myPeerId) {
+              setIsHost(true);
+              addMessage(`You were made a host by ${promoterName}.`);
+          } else {
+              const promotedUser = participants.find(p => p.id === peerId);
+              if (promotedUser) {
+                  addMessage(`${promotedUser.name} was made a host by ${promoterName}.`);
+              }
+          }
+          break;
+      }
       case 'call-request': {
         if (callState !== 'idle') { // Busy
             conn.send({ type: 'call-rejected', payload: { calleeId: myPeerId, reason: 'busy' } });
@@ -244,7 +258,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
 
         conn.on('open', () => {
           setupDataConnection(conn);
-          const newUser: Participant = { id: conn.peer, name: newUserName };
+          const newUser: Participant = { id: conn.peer, name: newUserName, isHost: false };
           const currentParticipants = [...participants, newUser];
           
           conn.send({ type: 'all-participants', payload: currentParticipants });
@@ -268,7 +282,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       hostPeer.on('open', (id) => {
           setIsHost(true);
           setMyPeerId(id);
-          const self: Participant = { id, name: userName! };
+          const self: Participant = { id, name: userName!, isHost: true };
           setParticipants([self]);
           setIsConnecting(false);
           setIsConnected(true);
@@ -344,6 +358,21 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     }
   }, [isHost, participants]);
   
+  const promoteToHost = useCallback((peerId: string) => {
+      if (!isHost || !userName) return;
+      
+      const payload = { peerId, promoterName: userName };
+      broadcast({ type: 'promote-host', payload });
+      
+      // Also update self
+      setParticipants(prev => prev.map(p => p.id === peerId ? { ...p, isHost: true } : p));
+      const promotedUser = participants.find(p => p.id === peerId);
+      if (promotedUser) {
+        addMessage(`${promotedUser.name} was made a host by you.`);
+      }
+
+  }, [isHost, userName, participants, addMessage]);
+
   const makeCall = useCallback((peerId: string) => {
     if (callState !== 'idle' || !myPeerId) return;
     const partner = participants.find(p => p.id === peerId);
@@ -378,7 +407,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   }, [callState, callPartner, myPeerId, resetCallState]);
 
 
-  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error, isHost, kickUser, callState, callPartner, makeCall, answerCall, rejectCall, hangUp };
+  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error, isHost, kickUser, promoteToHost, callState, callPartner, makeCall, answerCall, rejectCall, hangUp };
 };
 
 export default useRoomConnection;

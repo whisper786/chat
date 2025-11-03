@@ -1,5 +1,5 @@
 import React from 'react';
-import { VideoIcon, VideoOffIcon, MicIcon, MicOffIcon, PhoneOffIcon, UsersIcon } from './icons/Icons';
+import { VideoIcon, VideoOffIcon, MicIcon, MicOffIcon, PhoneOffIcon } from './icons/Icons';
 
 interface ControlsProps {
   onLeave: () => void;
@@ -7,7 +7,6 @@ interface ControlsProps {
   isCameraOn: boolean;
   toggleMic: () => void;
   toggleCamera: () => void;
-  onToggleParticipants: () => void;
   callState: 'idle' | 'outgoing' | 'incoming' | 'connected';
   hangUp: () => void;
 }
@@ -23,7 +22,7 @@ const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; 
 );
 
 
-const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera, onToggleParticipants, callState, hangUp }) => {
+const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera, callState, hangUp }) => {
   const inCall = callState === 'connected' || callState === 'outgoing';
   
   const handleMainAction = () => {
@@ -50,17 +49,10 @@ const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggl
       >
           {isCameraOn ? <VideoIcon className="w-6 h-6"/> : <VideoOffIcon className="w-6 h-6"/>}
       </ControlButton>
-       <ControlButton 
-          onClick={onToggleParticipants} 
-          title={'Participants'}
-          className="bg-slate-600 hover:bg-slate-500"
-      >
-          <UsersIcon className="w-6 h-6"/>
-      </ControlButton>
       <button 
         onClick={handleMainAction} 
         title={inCall ? "Hang Up" : "Leave Room"}
-        className="flex items-center justify-center w-auto h-12 px-5 font-semibold text-white bg-brand-danger rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary transition-transform transform hover:scale-105"
+        className="flex items-center justify-center w-auto h-12 px-5 font-semibold text-white bg-brand-highlight rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary transition-transform transform hover:scale-105"
       >
         <PhoneOffIcon className="w-6 h-6" />
         <span className="ml-2">{inCall ? "Hang Up" : "Leave"}</span>

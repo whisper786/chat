@@ -37,6 +37,7 @@ const App: React.FC = () => {
     joinRoom,
     isHost,
     kickUser,
+    promoteToHost,
     callState,
     callPartner,
     makeCall,
@@ -90,7 +91,7 @@ const App: React.FC = () => {
       <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
         <h2 className="text-2xl text-brand-danger mb-4">An Error Occurred</h2>
         <p className="max-w-md mb-6">{error}</p>
-        <button onClick={() => { window.location.hash = ''; window.location.reload(); }} className="px-6 py-2 bg-brand-accent text-white font-semibold rounded-lg">Start Over</button>
+        <button onClick={() => { window.location.hash = ''; window.location.reload(); }} className="px-6 py-2 bg-brand-highlight text-white font-semibold rounded-lg">Start Over</button>
       </div>
     );
   }
@@ -101,6 +102,7 @@ const App: React.FC = () => {
         <JoinModal onJoin={handleJoin} />
       ) : (
         <ChatRoom
+          roomName={roomName}
           localStream={stream}
           myPeerId={myPeerId}
           participants={participants}
@@ -114,6 +116,7 @@ const App: React.FC = () => {
           userName={userInfo.name}
           isHost={isHost}
           onKick={kickUser}
+          onPromote={promoteToHost}
           callState={callState}
           callPartner={callPartner}
           makeCall={makeCall}
