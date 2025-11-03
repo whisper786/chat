@@ -164,6 +164,11 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
             callsRef.current.delete(call.peer);
             setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
         });
+        call.on('error', (err) => {
+            console.error(`Incoming call error from ${call.peer}:`, err);
+            callsRef.current.delete(call.peer);
+            setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
+        });
       } else {
           console.error("CRITICAL: Received a call but localStream is not available. This can cause one-way audio/video.");
       }
@@ -249,18 +254,34 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
 
 
   useEffect(() => {
-    if (isConnected && localStream && peerRef.current) {
-        participants.forEach(p => {
-            if (p.id !== myPeerId && !callsRef.current.has(p.id)) {
-                const call = peerRef.current!.call(p.id, localStream);
-                if (call) {
-                    callsRef.current.set(p.id, call);
-                    call.on('stream', (remoteStream) => {
-                        setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: remoteStream } : user));
-                    });
-                }
-            }
-        });
+    if (isConnected && localStream && peerRef.current && myPeerId) {
+      participants.forEach(p => {
+        // To prevent a "glare" race condition where both peers call each other
+        // simultaneously, we establish a convention: the peer with the lexicographically
+        // smaller ID is responsible for making the call. This ensures only one
+        // call is initiated between any two peers.
+        const shouldCall = p.id !== myPeerId && !callsRef.current.has(p.id) && myPeerId < p.id;
+
+        if (shouldCall) {
+          const call = peerRef.current!.call(p.id, localStream);
+          if (call) {
+            callsRef.current.set(p.id, call);
+            call.on('stream', (remoteStream) => {
+              setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: remoteStream } : user));
+            });
+            call.on('close', () => {
+              // Clean up on call close from the caller's side as well for robustness.
+              callsRef.current.delete(p.id);
+              setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: undefined } : user));
+            });
+            call.on('error', (err) => {
+              console.error(`Outgoing call error to ${p.id}:`, err);
+              callsRef.current.delete(p.id);
+               setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: undefined } : user));
+            });
+          }
+        }
+      });
     }
   }, [participants, localStream, isConnected, myPeerId]);
   
