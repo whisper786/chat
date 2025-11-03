@@ -37,6 +37,12 @@ const App: React.FC = () => {
     joinRoom,
     isHost,
     kickUser,
+    callState,
+    callPartner,
+    makeCall,
+    answerCall,
+    rejectCall,
+    hangUp,
   } = useRoomConnection(userInfo?.name, roomName, stream);
 
   const handleJoin = async (name: string) => {
@@ -108,6 +114,12 @@ const App: React.FC = () => {
           userName={userInfo.name}
           isHost={isHost}
           onKick={kickUser}
+          callState={callState}
+          callPartner={callPartner}
+          makeCall={makeCall}
+          answerCall={answerCall}
+          rejectCall={rejectCall}
+          hangUp={hangUp}
         />
       )}
     </div>

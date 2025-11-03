@@ -8,6 +8,8 @@ interface ControlsProps {
   toggleMic: () => void;
   toggleCamera: () => void;
   onToggleParticipants: () => void;
+  callState: 'idle' | 'outgoing' | 'incoming' | 'connected';
+  hangUp: () => void;
 }
 
 const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string, title: string, active?: boolean }> = ({ onClick, children, className = '', title, active = true }) => (
@@ -21,7 +23,17 @@ const ControlButton: React.FC<{ onClick: () => void; children: React.ReactNode; 
 );
 
 
-const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera, onToggleParticipants }) => {
+const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggleMic, toggleCamera, onToggleParticipants, callState, hangUp }) => {
+  const inCall = callState === 'connected' || callState === 'outgoing';
+  
+  const handleMainAction = () => {
+    if (inCall) {
+      hangUp();
+    } else {
+      onLeave();
+    }
+  };
+
   return (
     <div className="flex items-center justify-center gap-4 p-2 bg-brand-secondary/80 backdrop-blur-sm rounded-full shadow-2xl">
       <ControlButton 
@@ -46,11 +58,12 @@ const Controls: React.FC<ControlsProps> = ({ onLeave, isMicOn, isCameraOn, toggl
           <UsersIcon className="w-6 h-6"/>
       </ControlButton>
       <button 
-        onClick={onLeave} 
-        title="Leave Room"
+        onClick={handleMainAction} 
+        title={inCall ? "Hang Up" : "Leave Room"}
         className="flex items-center justify-center w-auto h-12 px-5 font-semibold text-white bg-brand-danger rounded-full shadow-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-brand-secondary transition-transform transform hover:scale-105"
       >
         <PhoneOffIcon className="w-6 h-6" />
+        <span className="ml-2">{inCall ? "Hang Up" : "Leave"}</span>
       </button>
     </div>
   );

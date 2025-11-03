@@ -15,7 +15,7 @@ export interface Message {
 }
 
 interface BroadcastData {
-    type: 'chat' | 'user-joined' | 'user-left' | 'participant-list' | 'name-taken' | 'all-participants' | 'kick';
+    type: 'chat' | 'user-joined' | 'user-left' | 'participant-list' | 'name-taken' | 'all-participants' | 'kick' | 'call-request' | 'call-accepted' | 'call-rejected' | 'call-ended';
     payload: any;
 }
 
@@ -28,6 +28,9 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const [isConnecting, setIsConnecting] = useState(false);
   const [isHost, setIsHost] = useState(false);
   
+  const [callState, setCallState] = useState<'idle' | 'outgoing' | 'incoming' | 'connected'>('idle');
+  const [callPartner, setCallPartner] = useState<Participant | null>(null);
+
   const connectionsRef = useRef<Map<string, DataConnection>>(new Map());
   const callsRef = useRef<Map<string, MediaConnection>>(new Map());
   const peerRef = useRef<PeerJS | null>(null);
@@ -51,8 +54,20 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       });
   };
 
+  const resetCallState = useCallback(() => {
+    if (callPartner?.id) {
+        const call = callsRef.current.get(callPartner.id);
+        call?.close();
+        callsRef.current.delete(callPartner.id);
+    }
+    setCallState('idle');
+    setCallPartner(null);
+  }, [callPartner]);
+
+
   const cleanup = useCallback(() => {
     isJoiningRef.current = false;
+    resetCallState();
     peerRef.current?.destroy();
     peerRef.current = null;
     connectionsRef.current.forEach(conn => conn.close());
@@ -63,7 +78,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     setParticipants([]);
     setIsHost(false);
     setMyPeerId(null);
-  }, []);
+  }, [resetCallState]);
 
   const handleIncomingData = (data: BroadcastData, conn: DataConnection) => {
     switch(data.type) {
@@ -80,12 +95,15 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       }
       case 'user-left': {
         const { peerId, name, reason } = data.payload;
-        setParticipants(prev => prev.filter(p => p.id !== peerId));
-        if (reason === 'kicked') {
+        if (callPartner?.id === peerId) {
+            addMessage(`${name} left, call ended.`);
+            resetCallState();
+        } else if (reason === 'kicked') {
             addMessage(`${name} was kicked from the room.`);
         } else {
             addMessage(`${name} has left the room.`);
         }
+        setParticipants(prev => prev.filter(p => p.id !== peerId));
         callsRef.current.get(peerId)?.close();
         callsRef.current.delete(peerId);
         break;
@@ -98,7 +116,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         setError('You have been kicked from the room by the host.');
         cleanup();
         break;
-       case 'all-participants': { 
+      case 'all-participants': { 
           const allParticipants: Participant[] = data.payload;
           setParticipants(allParticipants);
           setIsConnected(true);
@@ -112,6 +130,43 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
           });
         }
         break;
+      case 'call-request': {
+        if (callState !== 'idle') { // Busy
+            conn.send({ type: 'call-rejected', payload: { calleeId: myPeerId, reason: 'busy' } });
+            return;
+        }
+        const caller = participants.find(p => p.id === data.payload.callerId);
+        if (caller) {
+            setCallPartner(caller);
+            setCallState('incoming');
+        }
+        break;
+      }
+      case 'call-accepted': {
+        if (callState === 'outgoing' && callPartner?.id === data.payload.calleeId) {
+            setCallState('connected');
+            if (localStreamRef.current) {
+                const call = peerRef.current!.call(data.payload.calleeId, localStreamRef.current);
+                setupMediaConnection(call);
+            }
+        }
+        break;
+      }
+      case 'call-rejected': {
+        if (callState === 'outgoing' && callPartner?.id === data.payload.calleeId) {
+            const reason = data.payload.reason === 'busy' ? 'is busy' : 'declined the call';
+            addMessage(`${callPartner.name} ${reason}.`);
+            resetCallState();
+        }
+        break;
+      }
+      case 'call-ended': {
+        if (callPartner?.id === data.payload.fromId) {
+             addMessage(`${callPartner.name} ended the call.`);
+             resetCallState();
+        }
+        break;
+      }
     }
   };
 
@@ -120,14 +175,13 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     conn.on('data', (data: any) => handleIncomingData(data, conn));
     conn.on('close', () => {
       connectionsRef.current.delete(conn.peer);
-      // Host handles broadcasting the leave message for graceful leaves.
-      // Kicked users are handled separately for immediate feedback.
       if (isHost) {
           const leftParticipant = participants.find(p => p.id === conn.peer);
-          if (leftParticipant) { // Check if they haven't been removed already (e.g., by kick)
+          if (leftParticipant) {
              broadcast({ type: 'user-left', payload: { peerId: leftParticipant.id, name: leftParticipant.name, reason: 'left' } });
              setParticipants(prev => prev.filter(p => p.id !== conn.peer));
              addMessage(`${leftParticipant.name} has left the room.`);
+             if (callPartner?.id === leftParticipant.id) resetCallState();
              callsRef.current.get(conn.peer)?.close();
              callsRef.current.delete(conn.peer);
           }
@@ -136,6 +190,23 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     conn.on('error', (err) => console.error(`Connection error with ${conn.peer}:`, err));
   };
   
+  const setupMediaConnection = (call: MediaConnection) => {
+      callsRef.current.set(call.peer, call);
+      call.on('stream', (remoteStream) => {
+        const updateWithStream = (p: Participant) => p.id === call.peer ? { ...p, stream: remoteStream } : p;
+        setParticipants(prev => prev.map(updateWithStream));
+        setCallPartner(prev => (prev && prev.id === call.peer) ? { ...prev, stream: remoteStream } : prev);
+      });
+      call.on('close', () => {
+          addMessage('Call ended.');
+          resetCallState();
+      });
+      call.on('error', (err) => {
+          console.error(`Call error with ${call.peer}:`, err);
+          resetCallState();
+      });
+  };
+
   const setupPeerListeners = (p: PeerJS) => {
      p.on('error', (err: any) => {
       if (err.type === 'peer-unavailable' && isJoiningRef.current) {
@@ -151,26 +222,12 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     });
     
     p.on('call', (call) => {
-      // CRITICAL FIX: Use the ref to get the most up-to-date stream.
-      // This prevents answering a call with a null stream if the call
-      // event fires before React has re-rendered with the stream state.
+      // Automatically answer incoming calls, as acceptance is handled at the signaling level.
       if (localStreamRef.current) {
         call.answer(localStreamRef.current);
-        callsRef.current.set(call.peer, call);
-        call.on('stream', (remoteStream) => {
-          setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: remoteStream } : p));
-        });
-        call.on('close', () => {
-            callsRef.current.delete(call.peer);
-            setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
-        });
-        call.on('error', (err) => {
-            console.error(`Incoming call error from ${call.peer}:`, err);
-            callsRef.current.delete(call.peer);
-            setParticipants(prev => prev.map(p => p.id === call.peer ? { ...p, stream: undefined } : p));
-        });
+        setupMediaConnection(call);
       } else {
-          console.error("CRITICAL: Received a call but localStream is not available. This can cause one-way audio/video.");
+         console.error("CRITICAL: Received a call but localStream is not available.");
       }
     });
     
@@ -191,7 +248,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
           const currentParticipants = [...participants, newUser];
           
           conn.send({ type: 'all-participants', payload: currentParticipants });
-          broadcast({ type: 'user-joined', payload: newUser }, conn.peer); // Broadcast to others
+          broadcast({ type: 'user-joined', payload: newUser }, conn.peer);
           
           setParticipants(currentParticipants);
           addMessage(`${newUser.name} has joined the room.`);
@@ -241,7 +298,6 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
 
   }, [userName, roomName, cleanup]);
 
-  // This effect ensures the local participant object always has the latest stream.
   useEffect(() => {
     if (localStream && myPeerId && participants.some(p => p.id === myPeerId && p.stream !== localStream)) {
       setParticipants(prev =>
@@ -252,39 +308,6 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     }
   }, [localStream, myPeerId, participants]);
 
-
-  useEffect(() => {
-    if (isConnected && localStream && peerRef.current && myPeerId) {
-      participants.forEach(p => {
-        // To prevent a "glare" race condition where both peers call each other
-        // simultaneously, we establish a convention: the peer with the lexicographically
-        // smaller ID is responsible for making the call. This ensures only one
-        // call is initiated between any two peers.
-        const shouldCall = p.id !== myPeerId && !callsRef.current.has(p.id) && myPeerId < p.id;
-
-        if (shouldCall) {
-          const call = peerRef.current!.call(p.id, localStream);
-          if (call) {
-            callsRef.current.set(p.id, call);
-            call.on('stream', (remoteStream) => {
-              setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: remoteStream } : user));
-            });
-            call.on('close', () => {
-              // Clean up on call close from the caller's side as well for robustness.
-              callsRef.current.delete(p.id);
-              setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: undefined } : user));
-            });
-            call.on('error', (err) => {
-              console.error(`Outgoing call error to ${p.id}:`, err);
-              callsRef.current.delete(p.id);
-               setParticipants(prev => prev.map(user => user.id === p.id ? { ...user, stream: undefined } : user));
-            });
-          }
-        }
-      });
-    }
-  }, [participants, localStream, isConnected, myPeerId]);
-  
   const sendMessage = useCallback((text: string) => {
       if (!text.trim() || !myPeerId) return;
       const message: Message = {
@@ -299,17 +322,11 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   }, [myPeerId, userName, addMessage]);
   
   const endCall = useCallback(() => {
-    // Notify others that this user is leaving before cleaning up
     if (isHost) {
         broadcast({ type: 'user-left', payload: { peerId: myPeerId, name: userName, reason: 'left' } });
-    } else {
-        const hostConn = connectionsRef.current.get(roomName!);
-        if (hostConn && hostConn.open) {
-            hostConn.close();
-        }
     }
     cleanup();
-  }, [cleanup, myPeerId, userName, isHost, roomName]);
+  }, [cleanup, myPeerId, userName, isHost]);
 
   const kickUser = useCallback((peerId: string) => {
     if (!isHost) return;
@@ -317,22 +334,51 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     const participantToKick = participants.find(p => p.id === peerId);
 
     if (conn && participantToKick) {
-        // 1. Send kick message to the user
         conn.send({ type: 'kick', payload: {} });
-
-        // 2. Immediately update local state and broadcast to others
         broadcast({ type: 'user-left', payload: { peerId: participantToKick.id, name: participantToKick.name, reason: 'kicked' } });
         setParticipants(prev => prev.filter(p => p.id !== peerId));
         callsRef.current.get(peerId)?.close();
         callsRef.current.delete(peerId);
-
-        // 3. Close the connection after a short delay to ensure message delivery
         setTimeout(() => conn.close(), 100);
         connectionsRef.current.delete(peerId);
     }
   }, [isHost, participants]);
+  
+  const makeCall = useCallback((peerId: string) => {
+    if (callState !== 'idle' || !myPeerId) return;
+    const partner = participants.find(p => p.id === peerId);
+    if (partner) {
+      setCallPartner(partner);
+      setCallState('outgoing');
+      const conn = connectionsRef.current.get(peerId);
+      conn?.send({ type: 'call-request', payload: { callerId: myPeerId } });
+    }
+  }, [participants, myPeerId, callState]);
 
-  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error, isHost, kickUser };
+  const answerCall = useCallback(() => {
+    if (callState !== 'incoming' || !callPartner || !myPeerId) return;
+    const conn = connectionsRef.current.get(callPartner.id);
+    conn?.send({ type: 'call-accepted', payload: { calleeId: myPeerId } });
+    setCallState('connected');
+  }, [callState, callPartner, myPeerId]);
+
+  const rejectCall = useCallback(() => {
+    if (callState !== 'incoming' || !callPartner || !myPeerId) return;
+    const conn = connectionsRef.current.get(callPartner.id);
+    conn?.send({ type: 'call-rejected', payload: { calleeId: myPeerId, reason: 'declined' } });
+    resetCallState();
+  }, [callState, callPartner, myPeerId, resetCallState]);
+  
+  const hangUp = useCallback(() => {
+    if ((callState === 'connected' || callState === 'outgoing') && callPartner) {
+        const conn = connectionsRef.current.get(callPartner.id);
+        conn?.send({ type: 'call-ended', payload: { fromId: myPeerId } });
+    }
+    resetCallState();
+  }, [callState, callPartner, myPeerId, resetCallState]);
+
+
+  return { myPeerId, participants, messages, sendMessage, joinRoom, endCall, isConnected, isConnecting, error, isHost, kickUser, callState, callPartner, makeCall, answerCall, rejectCall, hangUp };
 };
 
 export default useRoomConnection;
