@@ -161,7 +161,9 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
           break;
       }
       case 'call-request': {
+        console.log(`[CALL_DEBUG] ${myPeerId} received call request from ${data.payload.callerId}`);
         if (callState !== 'idle') { // Busy
+            console.log(`[CALL_DEBUG] Busy, rejecting call request from ${data.payload.callerId}`);
             conn.send({ type: 'call-rejected', payload: { calleeId: myPeerId, reason: 'busy' } });
             return;
         }
@@ -169,19 +171,20 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
         if (caller) {
             setCallPartner(caller);
             setCallState('incoming');
+        } else {
+            console.warn(`[CALL_DEBUG] Received call request from unknown peer ID: ${data.payload.callerId}`);
         }
         break;
       }
       case 'call-accepted': {
         if (callState === 'outgoing' && callPartner?.id === data.payload.calleeId) {
-            console.log('Call accepted by', data.payload.calleeId);
+            console.log(`[CALL_DEBUG] Call accepted by ${data.payload.calleeId}. Placing media call.`);
             setCallState('connected');
             if (localStreamRef.current) {
-                console.log('Making media call to', data.payload.calleeId);
                 const call = peerRef.current!.call(data.payload.calleeId, localStreamRef.current);
                 setupMediaConnection(call);
             } else {
-                console.error("CRITICAL: Cannot make call, localStream is not available.");
+                console.error("[CALL_DEBUG] CRITICAL: Cannot make call, localStream is not available.");
                 addMessage('Could not start call: your video/mic is not ready.');
                 resetCallState();
             }
@@ -229,18 +232,18 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const setupMediaConnection = (call: MediaConnection) => {
       callsRef.current.set(call.peer, call);
       call.on('stream', (remoteStream) => {
-        console.log('Stream received from', call.peer);
+        console.log(`[CALL_DEBUG] Stream received from ${call.peer}`);
         const updateWithStream = (p: Participant) => p.id === call.peer ? { ...p, stream: remoteStream } : p;
         setParticipants(prev => prev.map(updateWithStream));
         setCallPartner(prev => (prev && prev.id === call.peer) ? { ...prev, stream: remoteStream } : prev);
       });
       call.on('close', () => {
-          console.log('Call closed with', call.peer);
+          console.log(`[CALL_DEBUG] Media call closed with ${call.peer}`);
           addMessage('Call ended.');
           resetCallState();
       });
       call.on('error', (err) => {
-          console.error(`Call error with ${call.peer}:`, err);
+          console.error(`[CALL_DEBUG] Media call error with ${call.peer}:`, err);
           addMessage(`An error occurred during the call.`);
           resetCallState();
       });
@@ -261,14 +264,14 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     });
     
     p.on('call', (call) => {
-      console.log('Incoming call received from', call.peer);
+      console.log(`[CALL_DEBUG] Received incoming media call from ${call.peer}`);
       // Automatically answer incoming calls, as acceptance is handled at the signaling level.
       if (localStreamRef.current) {
-        console.log('Answering call with local stream.');
+        console.log('[CALL_DEBUG] Answering media call with local stream.');
         call.answer(localStreamRef.current);
         setupMediaConnection(call);
       } else {
-         console.error("CRITICAL: Received a call but localStream is not available.");
+         console.error("[CALL_DEBUG] CRITICAL: Received a media call but localStream is not available.");
          addMessage('Could not answer call: your video/mic is not ready.');
       }
     });
@@ -405,15 +408,19 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     if (callState !== 'idle' || !myPeerId) return;
     const partner = participants.find(p => p.id === peerId);
     if (partner) {
+      console.log(`[CALL_DEBUG] Initiating call from ${myPeerId} to ${peerId}`);
       setCallPartner(partner);
       setCallState('outgoing');
       const conn = connectionsRef.current.get(peerId);
       conn?.send({ type: 'call-request', payload: { callerId: myPeerId } });
+    } else {
+        console.error(`[CALL_DEBUG] Could not find participant with ID ${peerId} to call.`);
     }
   }, [participants, myPeerId, callState]);
 
   const answerCall = useCallback(() => {
     if (callState !== 'incoming' || !callPartner || !myPeerId) return;
+    console.log(`[CALL_DEBUG] ${myPeerId} is answering call from ${callPartner.id}`);
     const conn = connectionsRef.current.get(callPartner.id);
     conn?.send({ type: 'call-accepted', payload: { calleeId: myPeerId } });
     setCallState('connected');
@@ -421,6 +428,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
 
   const rejectCall = useCallback(() => {
     if (callState !== 'incoming' || !callPartner || !myPeerId) return;
+    console.log(`[CALL_DEBUG] ${myPeerId} is rejecting call from ${callPartner.id}`);
     const conn = connectionsRef.current.get(callPartner.id);
     conn?.send({ type: 'call-rejected', payload: { calleeId: myPeerId, reason: 'declined' } });
     resetCallState();

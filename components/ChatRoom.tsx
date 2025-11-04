@@ -6,7 +6,7 @@ import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import ParticipantList from './ParticipantList';
-import { PhoneIcon, VideoIcon, UsersIcon } from './icons/Icons';
+import { PhoneIcon, VideoOffIcon, UsersIcon } from './icons/Icons';
 
 interface ChatRoomProps {
     roomName: string | null;
@@ -160,6 +160,7 @@ const CallView: React.FC<{
 
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+    const [isSelfViewOpen, setIsSelfViewOpen] = useState(true);
     const otherParticipant = props.participants.find(p => p.id !== props.myPeerId);
 
     return (
@@ -196,10 +197,34 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     </div>
                 )}
 
+                {/* Self-view window */}
+                {props.localStream && isSelfViewOpen && props.callState !== 'connected' && (
+                    <DraggableResizableWindow
+                        title="My Camera"
+                        initialPosition={{ x: window.innerWidth - 370, y: 80 }}
+                        initialSize={{ width: 350, height: 230 }}
+                        onClose={() => setIsSelfViewOpen(false)}
+                    >
+                        {props.isCameraOn ? (
+                            <ParticipantView
+                                participant={{ id: props.myPeerId || 'local', name: props.userName, stream: props.localStream }}
+                                isSelf={true}
+                                isMicOn={props.isMicOn}
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-slate-400">
+                                <VideoOffIcon className="w-16 h-16" />
+                                <p className="mt-2 font-semibold">Camera is off</p>
+                            </div>
+                        )}
+                    </DraggableResizableWindow>
+                )}
+
+
                 {isParticipantsOpen && props.myPeerId && (
                     <DraggableResizableWindow
                         title={`Participants (${props.participants.length})`}
-                        initialPosition={{ x: window.innerWidth - 400, y: 100 }}
+                        initialPosition={{ x: 20, y: 80 }}
                         initialSize={{ width: 350, height: 400 }}
                         onClose={() => setIsParticipantsOpen(false)}
                     >
