@@ -19,6 +19,22 @@ interface BroadcastData {
     payload: any;
 }
 
+const PEER_CONFIG = {
+  // For development, you can set a high debug level.
+  // In production, you'd want to lower or remove this.
+  // debug: 3, 
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ],
+  },
+};
+
+
 const useRoomConnection = (userName: string | null, roomName: string | null, localStream: MediaStream | null) => {
   const [myPeerId, setMyPeerId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -158,10 +174,16 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       }
       case 'call-accepted': {
         if (callState === 'outgoing' && callPartner?.id === data.payload.calleeId) {
+            console.log('Call accepted by', data.payload.calleeId);
             setCallState('connected');
             if (localStreamRef.current) {
+                console.log('Making media call to', data.payload.calleeId);
                 const call = peerRef.current!.call(data.payload.calleeId, localStreamRef.current);
                 setupMediaConnection(call);
+            } else {
+                console.error("CRITICAL: Cannot make call, localStream is not available.");
+                addMessage('Could not start call: your video/mic is not ready.');
+                resetCallState();
             }
         }
         break;
@@ -207,16 +229,19 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
   const setupMediaConnection = (call: MediaConnection) => {
       callsRef.current.set(call.peer, call);
       call.on('stream', (remoteStream) => {
+        console.log('Stream received from', call.peer);
         const updateWithStream = (p: Participant) => p.id === call.peer ? { ...p, stream: remoteStream } : p;
         setParticipants(prev => prev.map(updateWithStream));
         setCallPartner(prev => (prev && prev.id === call.peer) ? { ...prev, stream: remoteStream } : prev);
       });
       call.on('close', () => {
+          console.log('Call closed with', call.peer);
           addMessage('Call ended.');
           resetCallState();
       });
       call.on('error', (err) => {
           console.error(`Call error with ${call.peer}:`, err);
+          addMessage(`An error occurred during the call.`);
           resetCallState();
       });
   };
@@ -236,12 +261,15 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     });
     
     p.on('call', (call) => {
+      console.log('Incoming call received from', call.peer);
       // Automatically answer incoming calls, as acceptance is handled at the signaling level.
       if (localStreamRef.current) {
+        console.log('Answering call with local stream.');
         call.answer(localStreamRef.current);
         setupMediaConnection(call);
       } else {
          console.error("CRITICAL: Received a call but localStream is not available.");
+         addMessage('Could not answer call: your video/mic is not ready.');
       }
     });
     
@@ -277,7 +305,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
       peerRef.current?.destroy();
       isJoiningRef.current = false;
       addMessage('No one is here... creating a new room!');
-      const hostPeer = new Peer(roomName) as PeerJS;
+      const hostPeer = new Peer(roomName, PEER_CONFIG) as PeerJS;
       peerRef.current = hostPeer;
       hostPeer.on('open', (id) => {
           setIsHost(true);
@@ -300,7 +328,7 @@ const useRoomConnection = (userName: string | null, roomName: string | null, loc
     setError(null);
     setMessages([{ id: `sys-${Date.now()}`, type: 'system', text: `Joining room: ${roomName}...` }]);
 
-    const guestPeer = new Peer() as PeerJS;
+    const guestPeer = new Peer(undefined, PEER_CONFIG) as PeerJS;
     peerRef.current = guestPeer;
     
     guestPeer.on('open', (id) => {
